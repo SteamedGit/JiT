@@ -36,6 +36,36 @@ git clone https://github.com/LTH14/JiT.git
 cd JiT
 ```
 
+#### uv
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
+
+```bash
+uv sync
+source .venv/bin/activate  # optional; uv run uses the environment automatically
+```
+
+The project uses Python 3.10 (`uv` downloads it if needed). `uv.lock` locks all
+dependencies, including the exact commit of the upstream customized
+`torch-fidelity` fork. No separate CUDA toolkit or conda installation is needed;
+the PyTorch wheels supply the CUDA runtime.
+
+Compatibility with `environment.yaml`:
+
+- **PyTorch 2.7.1 / torchvision 0.22.1 / CUDA 12.8** replace 2.5.1 / 0.20.1 /
+  12.4, adding support for NVIDIA Blackwell GPUs.
+- Python remains 3.10, NumPy is pinned to 1.22.4 (within upstream's 1.22 series),
+  and all other versioned application dependencies retain their upstream pins.
+- `setuptools<81` keeps `pkg_resources` available for TensorBoard 2.10.
+  The original conda `pip=22.3` pin is unnecessary because uv manages installation.
+- The checkpoint loader allowlists `argparse.Namespace`, saved in JiT training
+  checkpoints, for PyTorch's newer weights-only loading default.
+
+Use `uv run` before the training and evaluation commands below, or
+activate `.venv` to run them directly.
+
+#### conda (original upstream environment)
+
 A suitable [conda](https://conda.io/) environment named `jit` can be created and activated with:
 
 ```
