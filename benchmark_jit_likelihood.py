@@ -19,7 +19,7 @@ def get_args_parser():
     parser.add_argument('--img_size', type=int, default=64)
     parser.add_argument('--runs', type=int, default=5)
     parser.add_argument('--warmup', type=int, default=2,
-                        help='Untimed full likelihood batches (default: 2)')
+                        help='Untimed full likelihood batches; 0 skips warm-up (default: 2)')
     parser.add_argument('--ode_method', choices=['euler', 'rk4', 'dopri5'], default='euler')
     parser.add_argument('--ode_steps', type=int, default=100,
                         help='Step count for fixed-step Euler or RK4')
@@ -107,8 +107,8 @@ def main():
             parser.error(f'--{name} must be positive')
     if args.runs < 2:
         parser.error('--runs must be at least 2 to compute a sample standard deviation')
-    if args.warmup < 1:
-        parser.error('--warmup must be at least 1 to exclude first-call startup costs')
+    if args.warmup < 0:
+        parser.error('--warmup must be non-negative')
     if args.img_size % int(args.model.rsplit('_', 1)[1]) != 0:
         parser.error('--img_size must be divisible by the model patch size')
     if args.noise_scale is None:
