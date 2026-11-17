@@ -1,6 +1,7 @@
 """Time exact JiT likelihood evaluation with random weights and random inputs."""
 
 import argparse
+from pathlib import Path
 import statistics
 import time
 from types import SimpleNamespace
@@ -30,6 +31,8 @@ def get_args_parser():
     parser.add_argument('--t_eps', type=float, default=0.05)
     parser.add_argument('--class_num', type=int, default=1000)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--output_file', type=Path,
+                        help='Also save settings and final timings to this text file (overwritten)')
     return parser
 
 
@@ -60,6 +63,7 @@ def benchmark(model, args):
         print(f'Warm-up {i + 1}/{args.warmup} complete', flush=True)
 
     timings = []
+    run_lines = []
     for i in range(args.runs):
         synchronize()
         start = time.perf_counter()
@@ -69,12 +73,29 @@ def benchmark(model, args):
         nfe = result[2]
         del result
         timings.append(elapsed)
-        print(f'Run {i + 1}/{args.runs}: {elapsed:.4f} s, {nfe} ODE evaluations', flush=True)
+        line = f'Run {i + 1}/{args.runs}: {elapsed:.4f} s, {nfe} ODE evaluations'
+        run_lines.append(line)
+        print(line, flush=True)
 
     mean = statistics.mean(timings)
-    print(f'Mean: {mean:.4f} s/batch')
-    print(f'Std:  {statistics.stdev(timings):.4f} s/batch (sample standard deviation)')
-    print(f'Throughput: {args.batch_size / mean:.2f} images/s')
+    summary = [
+        f'Mean: {mean:.4f} s/batch',
+        f'Std:  {statistics.stdev(timings):.4f} s/batch (sample standard deviation)',
+        f'Throughput: {args.batch_size / mean:.2f} images/s',
+    ]
+    print('\n'.join(summary))
+    if args.output_file is not None:
+        hardware = torch.cuda.get_device_name(device) if device.type == 'cuda' else str(device)
+        settings = [f'{name}: {value}' for name, value in vars(args).items()]
+        report = [
+            'JiT likelihood benchmark', f'Device: {hardware}',
+            'Random weights and inputs; exact trace; CFG: 1; precision: fp32; compile: False',
+            'Timing excludes initialization, input creation, warm-ups, and file saving.',
+            '', 'Settings:', *settings, '', 'Timings:', *run_lines, '', *summary,
+        ]
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
+        args.output_file.write_text('\n'.join(report) + '\n', encoding='utf-8')
+        print(f'Saved results to {args.output_file}')
     return timings
 
 

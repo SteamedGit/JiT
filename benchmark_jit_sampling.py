@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import nullcontext
+from pathlib import Path
 import statistics
 import time
 
@@ -44,6 +45,8 @@ def get_args_parser():
     # Retain compatibility with earlier commands; compilation is always enabled.
     parser.add_argument('--compile', action='store_true', default=True, help=argparse.SUPPRESS)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--output_file', type=Path,
+                        help='Also save settings and final timings to this text file (overwritten)')
     # Denoiser requires these training settings, but sampling does not use them.
     parser.set_defaults(attn_dropout=0.0, proj_dropout=0.0, label_drop_prob=0.1,
                         P_mean=-0.8, P_std=0.8, ema_decay1=0.9999, ema_decay2=0.9996)
@@ -74,6 +77,7 @@ def benchmark(model, args):
         print(f'Warm-up {i + 1}/{args.warmup} complete', flush=True)
 
     timings = []
+    run_lines = []
     for i in range(args.runs):
         synchronize()
         start = time.perf_counter()
@@ -82,13 +86,31 @@ def benchmark(model, args):
         elapsed = time.perf_counter() - start
         del images
         timings.append(elapsed)
-        print(f'Run {i + 1}/{args.runs}: {elapsed:.4f} s', flush=True)
+        line = f'Run {i + 1}/{args.runs}: {elapsed:.4f} s'
+        run_lines.append(line)
+        print(line, flush=True)
 
     mean = statistics.mean(timings)
     std = statistics.stdev(timings)
-    print(f'Mean: {mean:.4f} s/batch')
-    print(f'Std:  {std:.4f} s/batch (sample standard deviation)')
-    print(f'Throughput: {args.batch_size / mean:.2f} images/s')
+    summary = [
+        f'Mean: {mean:.4f} s/batch',
+        f'Std:  {std:.4f} s/batch (sample standard deviation)',
+        f'Throughput: {args.batch_size / mean:.2f} images/s',
+    ]
+    print('\n'.join(summary))
+    if args.output_file is not None:
+        hardware = torch.cuda.get_device_name(device) if device.type == 'cuda' else str(device)
+        settings = [f'{name}: {value}' for name, value in vars(args).items()]
+        report = [
+            'JiT sampling benchmark', f'Device: {hardware}',
+            'Random weights; compile: True',
+            'Timing includes noise generation and sampling; excludes initialization, '
+            'warm-ups, compilation during warm-ups, and file saving.',
+            '', 'Settings:', *settings, '', 'Timings:', *run_lines, '', *summary,
+        ]
+        args.output_file.parent.mkdir(parents=True, exist_ok=True)
+        args.output_file.write_text('\n'.join(report) + '\n', encoding='utf-8')
+        print(f'Saved results to {args.output_file}')
     return timings
 
 
